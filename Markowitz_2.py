@@ -74,7 +74,30 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
+        for current_date in self.portfolio_weights.index:
+            if self.portfolio_weights.index.get_loc(current_date) < self.lookback:
+                continue
 
+            historical_returns = self.returns.loc[
+                current_date - pd.DateOffset(days=self.lookback) : current_date, assets
+            ]
+            mean_returns = historical_returns.mean()
+            cov_matrix = historical_returns.cov()
+
+            model = gp.Model()
+            weights = model.addVars(assets, lb=0, ub=1, name="weights")
+            portfolio_return = gp.quicksum(weights[asset] * mean_returns[asset] for asset in assets)
+            portfolio_risk = gp.quicksum(
+                weights[asset1] * weights[asset2] * cov_matrix.loc[asset1, asset2]
+                for asset1 in assets for asset2 in assets
+            )
+
+            model.setObjective(portfolio_return - self.gamma * portfolio_risk, gp.GRB.MAXIMIZE)
+            model.addConstr(gp.quicksum(weights[asset] for asset in assets) == 1)
+            model.optimize()
+
+            for asset in assets:
+                self.portfolio_weights.loc[current_date, asset] = weights[asset].X
         """
         TODO: Complete Task 4 Above
         """
