@@ -68,8 +68,62 @@ class MyPortfolio:
 
         """
         TODO: Complete Task 4 Below
-        """
-
+        """        
+        momentum_lookback = min(63, self.lookback)
+        vol_lookback = min(42, self.lookback)
+        
+        for asset in self.price.columns:
+            self.portfolio_weights[asset] = 0
+        
+        for i, date in enumerate(self.price.index):
+            if i < momentum_lookback:
+                self.portfolio_weights.loc[date, assets] = 1.0 / len(assets)
+                continue
+            
+            try:
+                hist_price = self.price.iloc[:i+1]
+                hist_returns = self.returns.iloc[:i+1]
+                
+                curr_price = hist_price.iloc[-1][assets]
+                past_price = hist_price.iloc[-momentum_lookback][assets]
+                momentum = curr_price / past_price - 1
+                
+                if i >= vol_lookback:
+                    recent_returns = hist_returns.iloc[-vol_lookback:][assets]
+                    vols = recent_returns.std() * np.sqrt(252)
+                    vols = vols.replace(0, vols.median() if not vols.median() == 0 else 0.2)
+                else:
+                    vols = pd.Series(0.2, index=assets)
+                
+                if momentum.mean() > 0:
+                    weights = 0.7 * (momentum / momentum.abs().sum()) + 0.3 * (1/vols / (1/vols).sum())
+                else:
+                    weights = 0.3 * (momentum / momentum.abs().sum()) + 0.7 * (1/vols / (1/vols).sum())
+                
+                weights[weights < 0] = 0
+                
+                if weights.sum() > 0:
+                    weights = weights / weights.sum()
+                else:
+                    weights = pd.Series(1.0 / len(assets), index=assets)
+                
+                max_weight = 0.25
+                over_max = weights > max_weight
+                if over_max.any():
+                    excess = weights[over_max].sum() - (max_weight * over_max.sum())
+                    weights[over_max] = max_weight
+                    
+                    under_max = ~over_max
+                    if under_max.any() and weights[under_max].sum() > 0:
+                        weights[under_max] = weights[under_max] * (weights[under_max].sum() + excess) / weights[under_max].sum()
+                
+                weights = weights / weights.sum()
+                
+                self.portfolio_weights.loc[date, assets] = weights
+                
+            except Exception as e:
+                self.portfolio_weights.loc[date, assets] = 1.0 / len(assets)
+        
         """
         TODO: Complete Task 4 Above
         """
